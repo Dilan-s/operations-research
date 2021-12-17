@@ -1,15 +1,90 @@
+import math
+
 import numpy as np
+
+
+class Fraction:
+    def __init__(self, num, den=1):
+        factor = math.gcd(num, den)
+        self.num = int(num / factor)
+        self.den = int(den / factor)
+        if self.den < 0:
+            self.num = -self.num
+            self.den = -self.den
+
+    def __add__(self, other):
+        if isinstance(other, Fraction):
+            return Fraction(int(self.num * other.den) + int(self.den * other.num), int(self.den * other.den))
+        if isinstance(other, int):
+            return self + Fraction(other)
+        raise Exception("add got unexpected type")
+
+    def __mul__(self, other):
+        if isinstance(other, Fraction):
+            return Fraction(int(self.num * other.num), int(self.den * other.den))
+        if isinstance(other, int):
+            return self * Fraction(other)
+        raise Exception("add got unexpected type")
+
+    def __sub__(self, other):
+        if isinstance(other, Fraction):
+            return Fraction(int(self.num * other.den) - int(self.den * other.num), int(self.den * other.den))
+        if isinstance(other, int):
+            return self - Fraction(other)
+        raise Exception("add got unexpected type")
+
+    def __truediv__(self, other):
+        if isinstance(other, Fraction):
+            return self * Fraction(other.den, other.num)
+        if isinstance(other, int):
+            return self / Fraction(other)
+        raise Exception("add got unexpected type")
+
+    def __lt__(self, other):
+        f = self - other
+        return f.num < 0
+
+    def __le__(self, other):
+        f = self - other
+        return f.num <= 0
+
+    def __eq__(self, other):
+        f = self - other
+        return f.num == 0
+
+    def __ne__(self, other):
+        f = self - other
+        return f.num != 0
+
+    def __gt__(self, other):
+        f = self - other
+        return f.num > 0
+
+    def __ge__(self, other):
+        f = self - other
+        return f.num >= 0
+
+    def toInput(self):
+        if self.den == 1:
+            return str(self.num)
+        return "Fraction(" + str(self.num) + ", " + str(self.den) + ")"
+
+    def __str__(self):
+        if self.den == 1:
+            return str(self.num)
+        else:
+            return str(self.num) + "/" + str(self.den)
 
 
 class Simplex:
     def __init__(self, obj, arr, rhs, BVs, all_vars):
-        self.obj = obj
-        self.arr = arr
-        self.rhs = rhs
+        self.obj = [x if isinstance(x, Fraction) else Fraction(x) for x in obj]
+        self.arr = [[x if isinstance(x, Fraction) else Fraction(x) for x in ar] for ar in arr]
+        self.rhs = [x if isinstance(x, Fraction) else Fraction(x) for x in rhs]
         self.BVs = BVs
         self.all_vars = all_vars
 
-    def run(self):
+    def run_simplex(self):
         self.to_solver_format()
         print(self)
         done = max(self.obj[1:]) <= 0
@@ -59,7 +134,9 @@ class Simplex:
             print("var", i, ">= 0;")
 
         print("minimize", self.all_vars[0] + ":",
-              " + ".join([str(coef) + "*" + var for (coef, var) in zip(self.obj[1:], self.all_vars[1:])]) + ";")
+              " + ".join(
+                  [str(coef * -1) + "*" + var for (coef, var) in zip(self.obj[1:], self.all_vars[1:])]) + " + " + str(
+                  self.rhs[0]) + ";")
 
         for ind, arr in enumerate(self.arr):
             print("subject to c" + str(ind) + ":",
@@ -67,20 +144,43 @@ class Simplex:
                       self.rhs[ind + 1]) + ";")
         print("end;")
 
+    def toInput(self):
+        z = "z = [" + ", ".join([x.toInput() for x in self.obj]) + "]"
+        b = "b = ["
+        f = True
+        for arr in self.arr:
+            if not f:
+                b += ", "
+            f = False
+            b += "[" + ", ".join([x.toInput() for x in arr]) + "]"
+        b += "]"
+        rhs = "rhs = [" + ", ".join([x.toInput() for x in self.rhs]) + "]"
+        bvs = "bvs = " + str(self.BVs)
+        var = "var = " + str(self.all_vars)
+        s = "\n".join("\t" + x for x in [z, b, rhs, bvs, var])
+        return s
+
     def __str__(self):
-        res = ["BV | " + "  | ".join(self.all_vars) + " | RHS"]
+        res = ["BV | " + " | ".join(self.all_vars) + " | RHS"]
         for i, v in enumerate(self.BVs):
             if i == 0:
-                s = v + " | " + " | ".join([str(round(float(x), 2)) for x in self.obj]) + " | " + str(
-                    round(self.rhs[i], 2))
+                s = v + " | " + " | ".join([str(x) for x in self.obj]) + " | " + str(self.rhs[i])
             else:
-                s = v + " | " + " | ".join([str(round(float(x), 2)) for x in self.arr[i - 1]]) + " | " + str(
-                    round(self.rhs[i], 2))
+                s = v + " | " + " | ".join([str(x) for x in self.arr[i - 1]]) + " | " + str(self.rhs[i])
             res.append(s)
         return "\n".join(res)
 
 
 if __name__ == '__main__':
-    s = Simplex([1, -4, 6, 0, 0, 0], [[0, -1, 1, 1, 0, 0], [0, 1, 3, 0, 1, 0], [0, 3, 1, 0, 0, 1]],
-                [0, 1, 9, 15], ["x0", "x3", "x4", "x5"], ["x0", "x1", "x2", "x3", "x4", "x5"])
-    s.run()
+    z = [1, 1, 4, 0, 0]
+    b = [[0, 2, 4, 1, 0],[0, 10, 3, 0, 1]]
+    rhs = [0, 7, 14]
+    bvs = ["z ", "x3", "x4"]
+    var = ["z ", "x1", "x2", "x3", "x4"]
+    s = Simplex(z,
+                b,
+                rhs,
+                bvs,
+                var)
+    s.run_simplex()
+    print(s.toInput())
